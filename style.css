@@ -1,0 +1,251 @@
+:root {
+  --bg: #f7f6f2;
+  --ink: #1d1d1b;
+  --mute: #6b6a64;
+  --line: #d9d6cc;
+  --field: #fff;
+  --accent: #1f5c4a;
+  --bad: #a63a2b;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    16px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+h1 {
+  font-size: 1.5rem;
+  margin: 8px 0 4px;
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 40px 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ink);
+}
+p.hint {
+  margin: 6px 0 14px;
+  color: var(--mute);
+  font-size: 0.9rem;
+}
+
+/* barra totali */
+.totals {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 36px;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.totals span {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.totals b {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.bad {
+  color: var(--bad);
+}
+.ok {
+  color: var(--accent);
+}
+
+/* campi */
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+input[type="number"] {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--mute);
+}
+label input,
+label select {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  color: var(--ink);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 3px;
+  padding: 6px 12px;
+}
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 4px 6px;
+  text-decoration: underline;
+}
+button.ghost {
+  background: none;
+  color: var(--ink);
+}
+button.link.del {
+  color: var(--mute);
+}
+
+/* griglia evento */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px 16px;
+}
+.grid label:first-child {
+  grid-column: span 2;
+}
+
+/* tabelle */
+.scroll {
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th {
+  text-align: left;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: var(--mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+td {
+  padding: 4px 8px 4px 0;
+  vertical-align: middle;
+}
+td:last-child,
+th:last-child {
+  padding-right: 0;
+}
+.r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#ingredienti td:first-child {
+  min-width: 160px;
+}
+#extra td:first-child {
+  min-width: 160px;
+}
+#ingredienti input[type="number"],
+#extra input[type="number"] {
+  min-width: 80px;
+}
+
+/* drink */
+.drink {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.drink.off {
+  opacity: 0.5;
+}
+.drink-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 8px;
+}
+.drink-head .grow {
+  flex: 1 1 180px;
+  font-weight: 600;
+}
+.drink-head label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+}
+.drink-head label input {
+  margin: 0;
+  width: auto;
+}
+.drink-head label input[type="number"] {
+  width: 70px;
+}
+.rrow {
+  display: grid;
+  grid-template-columns: 1fr 80px 48px 28px;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+  max-width: 460px;
+}
+.rrow .pct {
+  color: var(--mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* avvisi */
+.warn {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--bad);
+  background: #f1e5e1;
+  font-size: 0.9rem;
+}
+.warn:empty {
+  display: none;
+}
+td.extra-tag {
+  color: var(--mute);
+}
+tfoot td {
+  border-top: 1px solid var(--ink);
+  font-weight: 600;
+  padding-top: 8px;
+}
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}

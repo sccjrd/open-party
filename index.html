@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calcolatore drink</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="totals" id="totals"></div>
+
+    <main>
+      <h1>Calcolatore drink</h1>
+      <div class="toolbar">
+        <button class="ghost" data-act="csv">Esporta lista spesa (CSV)</button>
+        <button class="ghost" data-act="reset">Ripristina esempio</button>
+      </div>
+
+      <h2>1. Evento</h2>
+      <div class="grid" id="evento"></div>
+
+      <h2>2. Ingredienti e prezzi</h2>
+      <p class="hint">
+        Un unico elenco usato da tutti i drink. Inserisci capacità e prezzo
+        della bottiglia/confezione e la gradazione (0 per gli analcolici).
+      </p>
+      <div class="scroll" id="ingredienti"></div>
+      <button class="link" data-act="add-ing">+ Aggiungi ingrediente</button>
+
+      <h2>3. Drink</h2>
+      <p class="hint">
+        La ricetta si scrive in parti: 2 Aperol + 3 Prosecco = 40% / 60%.
+        "Porzioni a persona" può essere decimale (0,5 = metà delle persone ne
+        beve uno).
+      </p>
+      <div id="drink"></div>
+      <button class="link" data-act="add-drink">+ Aggiungi drink</button>
+
+      <h2>4. Extra (acquisti a unità)</h2>
+      <p class="hint">
+        Cose che non passano da una ricetta: birre, ghiaccio, bicchieri…
+      </p>
+      <div class="scroll" id="extra"></div>
+      <button class="link" data-act="add-extra">+ Aggiungi extra</button>
+
+      <h2>5. Lista della spesa</h2>
+      <div class="scroll" id="lista"></div>
+      <div class="warn" id="avvisi"></div>
+
+      <h2>Costo per drink</h2>
+      <div class="scroll" id="costi"></div>
+    </main>
+
+    <script>
+      const KEY = "calcolatore-drink-v1";
+      const $ = (s) => document.querySelector(s);
+      const esc = (s) =>
+        String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      const val = (v) => v || "";
+      const eur = new Intl.NumberFormat("it-IT", {
+        style: "currency",
+        currency: "EUR",
+      });
+      const dec = new Intl.NumberFormat("it-IT", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      let counter = 0;
+      const uid = () => "x" + ++counter + Date.now().toString(36);
+
+      /* ---------- dati di partenza (dal foglio Excel) ---------- */
+      function defaults() {
+        const I = [
+          ["Birra", 0.75, 1.5, 5],
+          ["Aperol", 1, 8.75, 11],
+          ["Prosecco", 0.75, 2.5, 11.5],
+          ["Tequila", 0.75, 11.9, 39],
+          ["Succo di pesca", 1, 1.09, 0],
+          ["Succo d'arancia", 1.5, 1.49, 0],
+          ["Succo di mirtillo", 1, 1.69, 0],
+          ["Coca-Cola", 1, 2, 0],
+          ["Granatina", 1, 3, 0],
+          ["Gin", 0.7, 5.39, 40],
+          ["Limonata", 1, 1.39, 0],
+          ["Montenegro", 0.75, 13.5, 23],
+          ["Sambuca", 0.7, 5.89, 38],
+          ["Vodka", 0.75, 5.59, 37.5],
+          ["Jägermeister", 0.7, 7.89, 35],
+        ].map(([nome, cap, prezzo, abv]) => ({
+          id: uid(),
+          nome,
+          cap,
+          prezzo,
+          abv,
+        }));
+        const id = (n) => I.find((x) => x.nome === n).id;
+        const D = (nome, tipo, porzioni, r) => ({
+          id: uid(),
+          nome,
+          tipo,
+          porzioni,
+          attivo: true,
+          ricetta: r.map(([n, parti]) => ({ ing: id(n), parti })),
+        });
+        return {
+          evento: {
+            nome: "Festa di Capodanno",
+            persone: 14,
+            volBic: 0.2,
+            volShot: 0.03,
+            target: 5,
+          },
+          ingredienti: I,
+          drink: [
+            D("Birra", "bicchiere", 1, [["Birra", 1]]),
+            D("Spritz", "bicchiere", 1, [
+              ["Aperol", 2],
+              ["Prosecco", 3],
+            ]),
+            D("Sex on the Beach", "bicchiere", 1, [
+              ["Vodka", 2],
+              ["Succo di pesca", 1],
+              ["Succo d'arancia", 1],
+              ["Succo di mirtillo", 1],
+            ]),
+            D("Tequila Sunrise", "bicchiere", 0.5, [
+              ["Succo d'arancia", 6],
+              ["Tequila", 3],
+              ["Granatina", 1],
+            ]),
+            D("Gin Lemon", "bicchiere", 0.5, [
+              ["Gin", 3],
+              ["Limonata", 4],
+            ]),
+            D("Shot misto", "shot", 3, [
+              ["Tequila", 1],
+              ["Montenegro", 1],
+              ["Sambuca", 1],
+              ["Jägermeister", 1],
+            ]),
+            D("Cola mix", "bicchiere", 1, [
+              ["Coca-Cola", 1],
+              ["Succo di pesca", 1],
+              ["Succo d'arancia", 1],
+              ["Succo di mirtillo", 1],
+              ["Limonata", 1],
+            ]),
+          ],
+          extra: [],
+        };
+      }
+
+      function load() {
+        try {
+          const s = JSON.parse(localStorage.getItem(KEY));
+          if (s && s.evento) return s;
+        } catch (e) {}
+        return defaults();
+      }
+      function save() {
+        try {
+          localStorage.setItem(KEY, JSON.stringify(state));
+        } catch (e) {}
+      }
+
+      let state = load();
+
+      /* ---------- calcolo ---------- */
+      function calc() {
+        const e = state.evento;
+        const need = {},
+          drinks = [],
+          warn = [];
+        let alcol = 0;
+        const ing = (id) => state.ingredienti.find((g) => g.id === id);
+
+        if (!(e.persone > 0)) warn.push("Inserisci il numero di persone.");
+
+        for (const d of state.drink) {
+          if (!d.attivo) continue;
+          const vol = d.tipo === "shot" ? e.volShot : e.volBic;
+          const tot = d.ricetta.reduce(
+            (s, r) => s + (ing(r.ing) ? r.parti : 0),
+            0,
+          );
+          if (tot <= 0) {
+            warn.push(`"${d.nome || "Senza nome"}": ricetta vuota.`);
+            continue;
+          }
+          const litri = e.persone * d.porzioni * vol;
+          let costo = 0;
+          for (const r of d.ricetta) {
+            const g = ing(r.ing);
+            if (!g || !r.parti) continue;
+            const fr = r.parti / tot,
+              l = litri * fr;
+            need[g.id] = (need[g.id] || 0) + l;
+            alcol += (l * g.abv) / 100;
+            if (g.cap > 0) costo += (fr * vol * g.prezzo) / g.cap;
+          }
+          drinks.push({
+            nome: d.nome || "Senza nome",
+            porzioni: e.persone * d.porzioni,
+            litri,
+            costo,
+          });
+        }
+
+        const righe = [];
+        for (const g of state.ingredienti) {
+          const l = need[g.id];
+          if (!l) continue;
+          if (!(g.cap > 0) || !(g.prezzo > 0))
+            warn.push(`"${g.nome || "Senza nome"}": manca capacità o prezzo.`);
+          const b = g.cap > 0 ? Math.ceil(l / g.cap - 1e-9) : 0;
+          righe.push({
+            nome: g.nome || "Senza nome",
+            serve: l,
+            bott: b,
+            prezzo: g.prezzo,
+            costo: b * g.prezzo,
+            avanzo: b * g.cap - l,
+          });
+        }
+        for (const x of state.extra) {
+          if (!x.qta) continue;
+          righe.push({
+            nome: x.nome || "Extra",
+            extra: true,
+            serve: x.qta * x.cap,
+            bott: x.qta,
+            prezzo: x.prezzo,
+            costo: x.qta * x.prezzo,
+            avanzo: null,
+          });
+        }
+
+        const totale = righe.reduce((s, r) => s + r.costo, 0);
+        return { drinks, righe, warn, totale, alcol };
+      }
+
+      /* ---------- rendering del form (solo su modifiche strutturali) ---------- */
+      function opts(sel) {
+        return (
+          '<option value="">Scegli…</option>' +
+          state.ingredienti
+            .map(
+              (g) =>
+                `<option value="${g.id}" ${g.id === sel ? "selected" : ""}>${esc(g.nome || "(senza nome)")}</option>`,
+            )
+            .join("")
+        );
+      }
+
+      function render() {
+        const e = state.evento;
+        $("#evento").innerHTML = `
+    <label>Nome evento<input data-sec="evento" data-f="nome" value="${esc(e.nome)}"></label>
+    <label>Persone<input type="number" min="1" step="1" data-sec="evento" data-f="persone" value="${val(e.persone)}"></label>
+    <label>Bicchiere (L)<input type="number" min="0" step="0.01" data-sec="evento" data-f="volBic" value="${val(e.volBic)}"></label>
+    <label>Shot (L)<input type="number" min="0" step="0.01" data-sec="evento" data-f="volShot" value="${val(e.volShot)}"></label>
+    <label>Quota target a persona (€)<input type="number" min="0" step="0.5" data-sec="evento" data-f="target" value="${val(e.target)}"></label>`;
+
+        $("#ingredienti").innerHTML = `
+    <table>
+      <thead><tr><th>Nome</th><th>Bottiglia (L)</th><th>Prezzo (€)</th><th>Gradi (%)</th><th></th></tr></thead>
+      <tbody>${state.ingredienti
+        .map(
+          (g, i) => `
+        <tr>
+          <td><input data-sec="ingredienti" data-i="${i}" data-f="nome" value="${esc(g.nome)}"></td>
+          <td><input type="number" min="0" step="0.01" data-sec="ingredienti" data-i="${i}" data-f="cap" value="${val(g.cap)}"></td>
+          <td><input type="number" min="0" step="0.01" data-sec="ingredienti" data-i="${i}" data-f="prezzo" value="${val(g.prezzo)}"></td>
+          <td><input type="number" min="0" max="100" step="0.5" placeholder="0" data-sec="ingredienti" data-i="${i}" data-f="abv" value="${val(g.abv)}"></td>
+          <td><button class="link del" data-act="del-ing" data-i="${i}">Elimina</button></td>
+        </tr>`,
+        )
+        .join("")}
+      </tbody>
+    </table>`;
+
+        $("#drink").innerHTML = state.drink
+          .map(
+            (d, i) => `
+    <div class="drink ${d.attivo ? "" : "off"}">
+      <div class="drink-head">
+        <input class="grow" placeholder="Nome drink" data-sec="drink" data-i="${i}" data-f="nome" value="${esc(d.nome)}">
+        <select data-sec="drink" data-i="${i}" data-f="tipo">
+          <option value="bicchiere" ${d.tipo === "bicchiere" ? "selected" : ""}>Bicchiere</option>
+          <option value="shot" ${d.tipo === "shot" ? "selected" : ""}>Shot</option>
+        </select>
+        <label>Porzioni a persona <input type="number" min="0" step="0.25" data-sec="drink" data-i="${i}" data-f="porzioni" value="${val(d.porzioni)}"></label>
+        <label><input type="checkbox" data-sec="drink" data-i="${i}" data-f="attivo" ${d.attivo ? "checked" : ""}> Attivo</label>
+        <button class="link del" data-act="del-drink" data-i="${i}">Elimina</button>
+      </div>
+      ${d.ricetta
+        .map(
+          (r, j) => `
+        <div class="rrow">
+          <select data-sec="ricetta" data-i="${i}" data-j="${j}" data-f="ing">${opts(r.ing)}</select>
+          <input type="number" min="0" step="0.5" aria-label="Parti" data-sec="ricetta" data-i="${i}" data-j="${j}" data-f="parti" value="${val(r.parti)}">
+          <span class="pct" data-pct="${i}-${j}"></span>
+          <button class="link del" aria-label="Rimuovi ingrediente" data-act="del-r" data-i="${i}" data-j="${j}">×</button>
+        </div>`,
+        )
+        .join("")}
+      <button class="link" data-act="add-r" data-i="${i}">+ Ingrediente</button>
+    </div>`,
+          )
+          .join("");
+
+        $("#extra").innerHTML = state.extra.length
+          ? `
+    <table>
+      <thead><tr><th>Nome</th><th>Litri per unità</th><th>Prezzo unità (€)</th><th>Quantità</th><th></th></tr></thead>
+      <tbody>${state.extra
+        .map(
+          (x, i) => `
+        <tr>
+          <td><input data-sec="extra" data-i="${i}" data-f="nome" value="${esc(x.nome)}"></td>
+          <td><input type="number" min="0" step="0.01" data-sec="extra" data-i="${i}" data-f="cap" value="${val(x.cap)}"></td>
+          <td><input type="number" min="0" step="0.01" data-sec="extra" data-i="${i}" data-f="prezzo" value="${val(x.prezzo)}"></td>
+          <td><input type="number" min="0" step="1" data-sec="extra" data-i="${i}" data-f="qta" value="${val(x.qta)}"></td>
+          <td><button class="link del" data-act="del-extra" data-i="${i}">Elimina</button></td>
+        </tr>`,
+        )
+        .join("")}
+      </tbody>
+    </table>`
+          : "";
+      }
+
+      /* ---------- riepilogo (si aggiorna a ogni tasto, senza toccare i campi) ---------- */
+      function update() {
+        save();
+        const c = calc(),
+          e = state.evento;
+        const pp = e.persone > 0 ? c.totale / e.persone : 0;
+        const diff = e.target > 0 ? pp - e.target : null;
+
+        $("#totals").innerHTML = `
+    <div><span>Totale</span><b>${eur.format(c.totale)}</b></div>
+    <div><span>A persona</span><b>${eur.format(pp)}</b></div>
+    ${diff !== null ? `<div><span>Rispetto al target</span><b class="${diff > 0 ? "bad" : "ok"}">${diff > 0 ? "+" : ""}${eur.format(diff)}</b></div>` : ""}
+    <div><span>Alcol puro a persona</span><b>${Math.round(e.persone > 0 ? (c.alcol * 1000) / e.persone : 0)} ml</b></div>`;
+
+        $("#lista").innerHTML = c.righe.length
+          ? `
+    <table>
+      <thead><tr><th>Voce</th><th class="r">Serve (L)</th><th class="r">Bottiglie</th><th class="r">Prezzo</th><th class="r">Costo</th><th class="r">Avanzo (L)</th></tr></thead>
+      <tbody>${c.righe
+        .map(
+          (r) => `
+        <tr>
+          <td>${esc(r.nome)}${r.extra ? ' <span class="extra-tag">(extra)</span>' : ""}</td>
+          <td class="r">${r.extra && !r.serve ? "–" : dec.format(r.serve)}</td>
+          <td class="r">${r.bott}</td>
+          <td class="r">${dec.format(r.prezzo)}</td>
+          <td class="r">${dec.format(r.costo)}</td>
+          <td class="r">${r.avanzo === null ? "–" : dec.format(r.avanzo)}</td>
+        </tr>`,
+        )
+        .join("")}
+      </tbody>
+      <tfoot><tr><td colspan="4">Totale</td><td class="r">${eur.format(c.totale)}</td><td></td></tr></tfoot>
+    </table>`
+          : '<p class="hint">Nessun ingrediente da comprare: aggiungi un drink con una ricetta.</p>';
+
+        $("#avvisi").innerHTML = [...new Set(c.warn)].map(esc).join("<br>");
+
+        $("#costi").innerHTML = c.drinks.length
+          ? `
+    <table>
+      <thead><tr><th>Drink</th><th class="r">Porzioni</th><th class="r">Litri</th><th class="r">Costo a porzione</th></tr></thead>
+      <tbody>${c.drinks
+        .map(
+          (d) => `
+        <tr><td>${esc(d.nome)}</td><td class="r">${dec.format(d.porzioni)}</td><td class="r">${dec.format(d.litri)}</td><td class="r">${eur.format(d.costo)}</td></tr>`,
+        )
+        .join("")}
+      </tbody>
+    </table>`
+          : "";
+
+        state.drink.forEach((d, i) => {
+          const tot = d.ricetta.reduce((s, r) => s + r.parti, 0);
+          d.ricetta.forEach((r, j) => {
+            const el = document.querySelector(`[data-pct="${i}-${j}"]`);
+            if (el)
+              el.textContent =
+                tot > 0 && r.parti
+                  ? Math.round((r.parti / tot) * 100) + "%"
+                  : "";
+          });
+        });
+      }
+
+      /* ---------- eventi ---------- */
+      document.addEventListener("input", (ev) => {
+        const t = ev.target,
+          sec = t.dataset.sec;
+        if (!sec) return;
+        const f = t.dataset.f,
+          i = +t.dataset.i,
+          j = +t.dataset.j;
+        const v =
+          t.type === "checkbox"
+            ? t.checked
+            : t.type === "number"
+              ? parseFloat(t.value) || 0
+              : t.value;
+
+        if (sec === "evento") state.evento[f] = v;
+        else if (sec === "ricetta") state.drink[i].ricetta[j][f] = v;
+        else state[sec][i][f] = v;
+
+        if (sec === "ingredienti" && f === "nome") {
+          const id = state.ingredienti[i].id;
+          document
+            .querySelectorAll(`select[data-f="ing"] option[value="${id}"]`)
+            .forEach((o) => (o.textContent = v || "(senza nome)"));
+        }
+        if (sec === "drink" && f === "attivo")
+          t.closest(".drink").classList.toggle("off", !v);
+        update();
+      });
+
+      function exportCsv() {
+        const c = calc();
+        const n = (x) => Number(x).toFixed(2).replace(".", ",");
+        const rows = [
+          ["Voce", "Serve (L)", "Bottiglie", "Prezzo", "Costo"],
+          ...c.righe.map((r) => [
+            r.nome,
+            n(r.serve),
+            r.bott,
+            n(r.prezzo),
+            n(r.costo),
+          ]),
+          ["Totale", "", "", "", n(c.totale)],
+        ];
+        const csv = rows
+          .map((r) =>
+            r.map((x) => '"' + String(x).replace(/"/g, '""') + '"').join(";"),
+          )
+          .join("\n");
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(
+          new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
+        );
+        a.download = "lista-spesa.csv";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      document.addEventListener("click", (ev) => {
+        const b = ev.target.closest("[data-act]");
+        if (!b) return;
+        const a = b.dataset.act,
+          i = +b.dataset.i,
+          j = +b.dataset.j;
+
+        if (a === "csv") return exportCsv();
+        if (a === "reset") {
+          if (!confirm("Sostituire tutti i dati con l'esempio?")) return;
+          state = defaults();
+        } else if (a === "add-ing")
+          state.ingredienti.push({
+            id: uid(),
+            nome: "",
+            cap: 0,
+            prezzo: 0,
+            abv: 0,
+          });
+        else if (a === "del-ing") {
+          const g = state.ingredienti[i];
+          const used = state.drink.some((d) =>
+            d.ricetta.some((r) => r.ing === g.id),
+          );
+          if (
+            used &&
+            !confirm(
+              "Questo ingrediente è usato in alcuni drink. Eliminarlo anche da lì?",
+            )
+          )
+            return;
+          state.drink.forEach(
+            (d) => (d.ricetta = d.ricetta.filter((r) => r.ing !== g.id)),
+          );
+          state.ingredienti.splice(i, 1);
+        } else if (a === "add-drink")
+          state.drink.push({
+            id: uid(),
+            nome: "",
+            tipo: "bicchiere",
+            porzioni: 1,
+            attivo: true,
+            ricetta: [{ ing: "", parti: 1 }],
+          });
+        else if (a === "del-drink") state.drink.splice(i, 1);
+        else if (a === "add-r")
+          state.drink[i].ricetta.push({ ing: "", parti: 1 });
+        else if (a === "del-r") state.drink[i].ricetta.splice(j, 1);
+        else if (a === "add-extra")
+          state.extra.push({ id: uid(), nome: "", cap: 0, prezzo: 0, qta: 1 });
+        else if (a === "del-extra") state.extra.splice(i, 1);
+
+        render();
+        update();
+      });
+
+      render();
+      update();
+    </script>
+  </body>
+</html>
